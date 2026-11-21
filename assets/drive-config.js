@@ -19,8 +19,8 @@
 (function (root) {
   'use strict';
   root.DRIVE_CONFIG = {
-    clientId: '', // 例：'1234567890-abc123.apps.googleusercontent.com'
-    apiKey: '',   // 例：'AIzaSy...'
-    appId: ''     // 例：'1234567890'（專案編號）
+    clientId: '77004314078-16mb8p1b2o7alea2cddul8t8ukk1l6m4.apps.googleusercontent.com',
+    apiKey: 'AIzaSyCF5AvOncWBhWwPFInFbliXVibXidDIGDc',
+    appId: '77004314078'
   };
 })(typeof window !== 'undefined' ? window : globalThis);

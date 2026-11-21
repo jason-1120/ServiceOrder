@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "title": "分配優先順序",
+  "exchangeRate": 0.21,
+  "internationalShippingTwd": 0,
+  "products": [
+    {"id": "p1", "productNumber": "1", "name": "商品一", "jpy": 1000, "twd": 230, "purchaseLimit": 10},
+    {"id": "p2", "productNumber": "2", "name": "商品二", "jpy": 2000, "twd": 460, "purchaseLimit": 10}
+  ],
+  "orders": [
+    {"id": "o-big", "nickname": "金額最高", "sequence": 6, "shippingTwd": 0, "quantities": {"p1": 1, "p2": 5}},
+    {"id": "o-paid-small", "nickname": "有付運費少", "sequence": 9, "shippingTwd": 60, "quantities": {"p1": 1}},
+    {"id": "o-tie-late", "nickname": "同額晚留言", "sequence": 3, "shippingTwd": 0, "quantities": {"p1": 2}},
+    {"id": "o-tie-early", "nickname": "同額早留言", "sequence": 2, "shippingTwd": 0, "quantities": {"p1": 2}},
+    {"id": "o-paid-big", "nickname": "有付運費多", "sequence": 8, "shippingTwd": 60, "quantities": {"p1": 1, "p2": 1}},
+    {"id": "o-noseq-1", "nickname": "無序號一", "shippingTwd": 0, "quantities": {"p1": 1}},
+    {"id": "o-noseq-2", "nickname": "無序號二", "shippingTwd": 0, "quantities": {"p1": 1}},
+    {"id": "o-p2-only", "nickname": "只買二", "sequence": 1, "shippingTwd": 0, "quantities": {"p2": 1}}
+  ],
+  "purchaseOrders": [],
+  "purchaseAccounts": [],
+  "shipmentRecords": []
+}

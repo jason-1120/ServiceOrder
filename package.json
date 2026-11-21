@@ -1,0 +1,8 @@
+{
+  "name": "service-order",
+  "private": true,
+  "description": "Static group-purchase order manager. No build step and no dependencies; package.json exists only to run the tests.",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "title": "盲盒整盒與單抽共用限購",
+  "exchangeRate": 0.21,
+  "internationalShippingTwd": 0,
+  "products": [
+    {"id": "bx", "productNumber": "10", "name": "盲盒 整盒", "jpy": 6600, "twd": 1500, "isBlindBox": true, "blindBoxType": "box", "blindBoxSize": 6, "purchaseLimit": 1},
+    {"id": "bs", "productNumber": "10", "name": "盲盒 單抽", "jpy": 1100, "twd": 250, "isBlindBox": true, "blindBoxType": "single", "blindBoxSize": 6, "purchaseLimit": 1},
+    {"id": "n1", "productNumber": "11", "name": "資料夾", "jpy": 800, "twd": 180, "purchaseLimit": 4}
+  ],
+  "orders": [
+    {"id": "o-a", "nickname": "A", "sequence": 1, "shippingTwd": 0, "quantities": {"bx": 2, "bs": 3}},
+    {"id": "o-b", "nickname": "B", "sequence": 2, "shippingTwd": 0, "quantities": {"bs": 5, "n1": 3}},
+    {"id": "o-c", "nickname": "C", "sequence": 3, "shippingTwd": 200, "quantities": {"bs": 2}},
+    {"id": "o-d", "nickname": "D", "sequence": 4, "shippingTwd": 0, "quantities": {"n1": 4}}
+  ],
+  "purchaseOrders": [],
+  "purchaseAccounts": [],
+  "shipmentRecords": []
+}

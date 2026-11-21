@@ -21,10 +21,28 @@ A static group-purchase order management app. It runs entirely in the browser an
 ## Project layout
 
 - `index.html` — application entry page
+- `assets/order-logic.js` — pure calculation logic (`OrderLogic`: money, allocation, purchase bundling, refunds, shipping split); loaded first
 - `assets/order-records.js` — initial order data and state
 - `assets/actual-purchase-refunds.js` — actual-purchase and refund features
 - `assets/system-core.js` — application logic and UI
 - `assets/product-detail-image.js` — product detail image export
+
+## Development
+
+The calculation logic in `assets/order-logic.js` has a regression test suite in `tests/`, written with Node's built-in `node:test` and `node:assert` (Node.js 18 or newer; no `npm install` needed, there are no dependencies).
+
+```sh
+npm test
+# or, without npm:
+node --test tests/
+```
+
+- `tests/*.test.js` — test files (money and totals, allocation priority, purchase-order bundling, refunds and shipping split)
+- `tests/fixtures/*.json` — hand-written order data in the same format as exported order JSON
+- `tests/index.js` — entry point that loads every `*.test.js` when `node --test tests/` is given the folder
+- `tests/support.js` — shared helpers (fixture loading, deterministic ids)
+
+The site itself still needs no build step; `package.json` only exists to run the tests.
 
 ## Notes
 

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "title": "整數分金額",
+  "exchangeRate": 0.21,
+  "internationalShippingTwd": 0,
+  "products": [
+    {"id": "a", "productNumber": "1", "name": "一角商品", "jpy": 0.1, "twd": 0.1, "purchaseLimit": 99},
+    {"id": "b", "productNumber": "2", "name": "兩角商品", "jpy": 0.2, "twd": 0.2, "purchaseLimit": 99},
+    {"id": "c", "productNumber": "3", "name": "一般商品", "jpy": 1234.56, "twd": 259.27, "purchaseLimit": 99}
+  ],
+  "orders": [
+    {"id": "o1", "nickname": "甲", "sequence": 1, "shippingTwd": 0.1, "quantities": {"a": 1, "b": 1}},
+    {"id": "o2", "nickname": "乙", "sequence": 2, "shippingTwd": 0, "quantities": {"a": 3, "c": 7}},
+    {"id": "o3", "nickname": "丙", "sequence": 3, "quantities": {}}
+  ],
+  "purchaseOrders": [],
+  "purchaseAccounts": [],
+  "shipmentRecords": []
+}

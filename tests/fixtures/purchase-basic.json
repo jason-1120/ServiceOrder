@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "title": "一般商品湊免運",
+  "exchangeRate": 0.21,
+  "internationalShippingTwd": 0,
+  "products": [
+    {"id": "p1", "productNumber": "1", "name": "托特包", "jpy": 3000, "twd": 690, "purchaseLimit": 3},
+    {"id": "p2", "productNumber": "2", "name": "壓克力立牌", "jpy": 4500, "twd": 1000, "purchaseLimit": 2},
+    {"id": "p3", "productNumber": "3", "name": "徽章", "jpy": 1200, "twd": 280, "purchaseLimit": 5},
+    {"id": "p4", "productNumber": "4", "name": "贈品貼紙", "jpy": 0, "twd": 50, "purchaseLimit": 10}
+  ],
+  "orders": [
+    {"id": "o-alice", "nickname": "Alice", "sequence": 1, "shippingTwd": 0, "quantities": {"p1": 2, "p3": 3}},
+    {"id": "o-bob", "nickname": "Bob", "sequence": 2, "shippingTwd": 150, "quantities": {"p1": 1, "p2": 1}},
+    {"id": "o-carol", "nickname": "Carol", "sequence": 3, "shippingTwd": 0, "quantities": {"p2": 3, "p3": 4}},
+    {"id": "o-dave", "nickname": "Dave", "sequence": 4, "shippingTwd": 0, "quantities": {"p1": 4, "p4": 2}},
+    {"id": "o-erin", "nickname": "Erin", "sequence": 5, "shippingTwd": 0, "quantities": {"p3": 2}}
+  ],
+  "purchaseOrders": [],
+  "purchaseAccounts": [],
+  "shipmentRecords": []
+}

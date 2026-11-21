@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "title": "實際購買短缺、退費與運費分攤",
+  "exchangeRate": 0.21,
+  "internationalShippingTwd": 100.03,
+  "products": [
+    {"id": "p1", "productNumber": "1", "name": "商品一", "jpy": 2000, "twd": 460, "purchaseLimit": 5},
+    {"id": "p2", "productNumber": "2", "name": "商品二", "jpy": 5000, "twd": 1150.5, "purchaseLimit": 5}
+  ],
+  "orders": [
+    {"id": "o1", "nickname": "Amy", "sequence": 1, "shippingTwd": 0, "quantities": {"p1": 2, "p2": 1}},
+    {"id": "o2", "nickname": "Ben", "sequence": 2, "shippingTwd": 80, "quantities": {"p1": 1}},
+    {"id": "o3", "nickname": "Cat", "sequence": 3, "shippingTwd": 0, "quantities": {"p1": 1}},
+    {"id": "o4", "nickname": "Dan", "sequence": 4, "shippingTwd": 0, "quantities": {"p1": 1, "p2": 1}},
+    {"id": "o5", "nickname": "Eve", "sequence": 5, "shippingTwd": 0, "quantities": {"p2": 1}}
+  ],
+  "purchaseOrders": [
+    {"id": "po-x", "accountId": "", "purchaser": "", "serial": 1, "name": "訂單1", "isOwnCart": false, "actualCostTwd": 2100.25,
+      "quantities": {"p1": 3, "p2": 1}, "actualQuantities": {"p1": 2, "p2": 1}},
+    {"id": "po-y", "accountId": "", "purchaser": "", "serial": 2, "name": "訂單2", "isOwnCart": false, "actualCostTwd": 1999.5,
+      "quantities": {"p1": 2, "p2": 2}, "actualQuantities": {"p1": 0, "p2": 2}}
+  ],
+  "purchaseAccounts": [],
+  "shipmentRecords": []
+}

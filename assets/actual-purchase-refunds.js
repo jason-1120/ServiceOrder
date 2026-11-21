@@ -1,7 +1,7 @@
 'use strict';
 
-function actualPurchaseQuantity(order,pid){return order.actualQuantities?.[pid]??order.quantities[pid]??0;}
-function actualPurchaseQuantities(order){return Object.fromEntries(state.products.map(p=>[p.id,actualPurchaseQuantity(order,p.id)]));}
+function actualPurchaseQuantity(order,pid){return OrderLogic.actualPurchaseQuantity(order,pid);}
+function actualPurchaseQuantities(order){return OrderLogic.actualPurchaseQuantities(state,order);}
 function actualQuantitiesAfterPlanChange(order,quantities){
  return Object.fromEntries(state.products.map(p=>{
   const previous=order?.quantities[p.id]??0,actual=order?actualPurchaseQuantity(order,p.id):0;
@@ -10,32 +10,9 @@ function actualQuantitiesAfterPlanChange(order,quantities){
   return [p.id,quantity];
  }));
 }
-function actualPurchaseReconciliation(){return purchaseReconciliation().map(row=>{const purchased=(state.purchaseOrders??[]).reduce((sum,o)=>sum+actualPurchaseQuantity(o,row.productId),0);return {...row,purchased,shortage:row.planned-purchased};});}
-function successfulBuyerQuantity(order){return state.products.reduce((sum,product)=>sum+Math.max(0,(order.quantities[product.id]??0)-(order.refundQuantities?.[product.id]??0)),0);}
-function internationalShippingBreakdown(){
- const buyers=state.orders.map(order=>({order,quantity:successfulBuyerQuantity(order)}));
- const buyerQuantityTotal=buyers.reduce((sum,buyer)=>sum+buyer.quantity,0);
- const totalQuantity=(state.purchaseOrders??[]).reduce((sum,order)=>sum+state.products.reduce((count,product)=>count+actualPurchaseQuantity(order,product.id),0),0);
- const internationalCents=moneyCents(state.internationalShippingTwd??0);
- const intlBaseCents=totalQuantity?Math.floor(internationalCents/totalQuantity):0;
- const intlRemainder=totalQuantity?internationalCents%totalQuantity:0;
- const domestic=shippingShare(),domesticTotalCents=moneyCents(domestic.totalShippingTwd);
- const domesticBaseCents=domestic.zeroShippingBuyerCount?Math.floor(domesticTotalCents/domestic.zeroShippingBuyerCount):0;
- const domesticRemainder=domestic.zeroShippingBuyerCount?domesticTotalCents%domestic.zeroShippingBuyerCount:0;
- let itemCursor=0,buyerCursor=0;
- const rows=buyers.map(({order,quantity})=>{
-  const start=itemCursor,end=start+quantity;
-  const extraIntlCents=Math.max(0,Math.min(end,intlRemainder)-Math.min(start,intlRemainder));
-  itemCursor=end;
-  const internationalCents=intlBaseCents*quantity+extraIntlCents;
-  const paysDomestic=(order.shippingTwd??0)===0&&quantity>0;
-  const domesticCents=paysDomestic?domesticBaseCents+(buyerCursor++<domesticRemainder?1:0):0;
-  return {order,quantity,internationalCents,domesticCents,totalCents:internationalCents+domesticCents};
- });
- const allocatedInternationalCents=rows.reduce((sum,row)=>sum+row.internationalCents,0);
- const allocatedDomesticCents=rows.reduce((sum,row)=>sum+row.domesticCents,0);
- return {rows,totalQuantity,buyerQuantityTotal,internationalCents,domesticTotalCents,allocatedInternationalCents,allocatedDomesticCents,unallocatedInternationalCents:internationalCents-allocatedInternationalCents,unallocatedDomesticCents:domesticTotalCents-allocatedDomesticCents,totalDueCents:rows.reduce((sum,row)=>sum+row.totalCents,0)};
-}
+function actualPurchaseReconciliation(){return OrderLogic.actualPurchaseReconciliation(state);}
+function successfulBuyerQuantity(order){return OrderLogic.successfulBuyerQuantity(state,order);}
+function internationalShippingBreakdown(){return OrderLogic.internationalShippingBreakdown(state);}
 function renderInternationalShippingAllocation(){
  const result=internationalShippingBreakdown(),amount=state.internationalShippingTwd??0;
  const unitRate=result.totalQuantity?amount/result.totalQuantity:0;
@@ -83,14 +60,7 @@ function editActualPurchaseQuantity(input){
 }
 
 // 每個商品分別從分配表最後一位買家往前扣件數，允許部分退費。
-function buildAutomaticRefunds(){
- validate(state);if(!(state.purchaseOrders??[]).length)throw Error('請先建立搶購清單 A，再確認實際購買紀錄 B。');const checks=actualPurchaseReconciliation();
- if(checks.some(row=>row.difference))throw Error('搶購清單 A 尚未與訂購明細一致，請先完成分配或修正超額數量，再產生退費。');
- if(checks.some(row=>!Number.isSafeInteger(row.planned)||!Number.isSafeInteger(row.purchased)||row.shortage<0))throw Error('搶購或實際購買數量無效，請先修正。');
- const refunds=new Map(state.orders.map(o=>[o.id,Object.fromEntries(state.products.map(p=>[p.id,0]))])),allocation=buildAllocation();
- for(const row of checks){let remaining=row.shortage;const priorities=allocation.products.find(p=>p.productId===row.productId).priorities;for(let i=priorities.length-1;i>=0&&remaining>0;i--){const buyer=priorities[i],quantity=Math.min(remaining,buyer.quantity);refunds.get(buyer.orderId)[row.productId]=quantity;remaining-=quantity;}if(remaining)throw Error('退費數量超過買家預購數量，請先核對分配表。');}
- return refunds;
-}
+function buildAutomaticRefunds(){return OrderLogic.buildAutomaticRefunds(state,{validate});}
 function refundExportData(){const rows=state.orders.map(o=>({order:o,products:state.products.filter(p=>(o.refundQuantities?.[p.id]??0)>0).map(p=>({product:p,quantity:o.refundQuantities[p.id]})),amount:refundAmount(o)})).filter(row=>row.products.length);if(!rows.length)throw Error('目前沒有需要退費的商品。');return rows;}
 async function refundExportCanvas(){
  validate(state);const rows=refundExportData();await document.fonts.ready;
@@ -123,16 +93,7 @@ function initializeActualPurchaseUI(){
 
 
 // 實付成本採台幣；null 代表未填，0 代表已確認沒有支出。
-function actualCostSummary(){
- const orders=state.purchaseOrders??[],missingCount=orders.filter(o=>o.actualCostTwd==null).length;
- const recordedCostTwd=orders.reduce((sum,o)=>sum+moneyCents(o.actualCostTwd??0),0)/100;
- const netRevenueTwd=(moneyCents(allTotals().twd)-moneyCents(refundGrandTotal()))/100;
- const shipping=shippingShare(),shippingSupplementTwd=shipping.totalShippingTwd;
- const complete=orders.length>0&&missingCount===0;
- return {recordedCostTwd,missingCount,totalCount:orders.length,complete,netRevenueTwd,shippingSupplementTwd,
-  belowFreeShippingCount:shipping.belowFreeShippingCount,
-  actualNetProfitTwd:complete?(moneyCents(netRevenueTwd)-moneyCents(recordedCostTwd)+moneyCents(shippingSupplementTwd))/100:null};
-}
+function actualCostSummary(){return OrderLogic.actualCostSummary(state);}
 function updateActualCostTotals(){
  const result=actualCostSummary(),amount=fmt(result.recordedCostTwd);
  const status=!result.totalCount?'尚無實際購買紀錄':result.missingCount?'已填 '+fmt(result.totalCount-result.missingCount)+'／'+fmt(result.totalCount)+' 筆，成本未填齊':'已填齊 '+fmt(result.totalCount)+' 筆成本';

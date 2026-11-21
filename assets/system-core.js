@@ -2,11 +2,11 @@
 // 由開啟使用.html 自動載入；計算、畫面互動與訂單檔案處理。
 const $=id=>document.getElementById(id), clone=x=>JSON.parse(JSON.stringify(x));
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=x=>new Intl.NumberFormat('zh-TW',{maximumFractionDigits:2}).format(x);
+const fmt=OrderLogic.fmt;
 // 金額以整數分運算，數量仍依商品限購與預購總量處理。
-function moneyCents(value){const cents=Math.round(value*100);if(!Number.isFinite(value)||!Number.isSafeInteger(cents))throw Error('金額過大，請調整輸入。');return cents;}
-function validMoney(value){return Number.isFinite(value)&&value>=0&&Number.isSafeInteger(Math.round(value*100))&&Number(value.toFixed(2))===value;}
-function roundMoney(value){const absolute=Math.abs(value),cents=Math.round((absolute+absolute*Number.EPSILON)*100);if(!Number.isFinite(value)||!Number.isSafeInteger(cents))throw Error('換算金額過大，請調整輸入。');return (value<0?-cents:cents)/100;}
+function moneyCents(value){return OrderLogic.moneyCents(value);}
+function validMoney(value){return OrderLogic.validMoney(value);}
+function roundMoney(value){return OrderLogic.roundMoney(value);}
 function assertSafeAmounts(data){
  moneyCents(data.internationalShippingTwd??0);
  let twd=0,jpy=0,refund=0,quantity=0;
@@ -77,21 +77,16 @@ function updateShipmentField(event){
 let purchaseAllocationBusy=false;
 const selectedOrderIds=new Set();
 function sortOrderRows(){if(!amountSort)return;const body=$('orders').querySelector('tbody');if(!body)return;const orderIndex=new Map(state.orders.map((o,i)=>[o.id,i]));const rows=[...body.rows].filter(row=>row.querySelector('[data-total="twd"]'));rows.sort((a,b)=>{const aid=a.querySelector('[data-total="twd"]').dataset.order,bid=b.querySelector('[data-total="twd"]').dataset.order;const ao=state.orders[orderIndex.get(aid)],bo=state.orders[orderIndex.get(bid)];const splitPriority=Number(Boolean(ao.isSplitBlindBox))-Number(Boolean(bo.isSplitBlindBox));const shippingPriority=ao.isSplitBlindBox&&bo.isSplitBlindBox?0:Number((bo.shippingTwd??0)>0)-Number((ao.shippingTwd??0)>0);const av=total(ao).twd,bv=total(bo).twd;return splitPriority||shippingPriority||(amountSort==='asc'?av-bv:bv-av)||orderIndex.get(aid)-orderIndex.get(bid)});for(let index=0;index<rows.length;index++){const current=body.rows[index];if(current!==rows[index])body.insertBefore(rows[index],current??null);}}
-function nicknameKey(name){return name.normalize('NFKC').trim().toLocaleLowerCase('zh-TW');}
+function nicknameKey(name){return OrderLogic.nicknameKey(name);}
 function uniqueBuyerName(){let name='新買家',suffix=2;while(state.orders.some(o=>nicknameKey(o.nickname)===nicknameKey(name)))name='新買家 '+suffix++;return name;}
-function productNumber(value){const number=String(value??'').normalize('NFKC').trim().replace(/^#+\s*/u,'').trim();return /^\d+$/.test(number)?String(Number(number)):number;}
+function productNumber(value){return OrderLogic.productNumber(value);}
 function validProductNumber(value){return /^\d+$/.test(String(value))&&Number(value)>=1&&Number(value)<=999;}
 // 商品編號是所有頁籤與匯出的共同順序；同編號維持原有先後。
 function sortProducts(products=state.products){return products.sort((a,b)=>Number(a.productNumber)-Number(b.productNumber));}
-function numberFromName(name){return String(name).normalize('NFKC').match(/^\s*#?\s*(\d+)(?=\D|$)/u)?.[1]??'';}
+function numberFromName(name){return OrderLogic.numberFromName(name);}
 function nextProductNumber(products=state.products){const used=new Set(products.map(p=>productNumber(p.productNumber||numberFromName(p.name))));let n=1;while(used.has(String(n)))n++;return String(n);}
-function productUnit(p){return p.isBlindBox?(p.blindBoxType==='single'?'抽':'盒'):'件';}
-function productLabel(p){
- const number=productNumber(p.productNumber),prefix=numberFromName(p.name);
- const name=number&&prefix?p.name.replace(/^\s*[#＃]?\s*\d+\s*/u,''):p.name;
- const unit=p.isBlindBox?(p.blindBoxType==='single'?'單抽':'整盒'):'';
- return (number?'#'+number+' ':'')+name+(unit&&!name.includes(unit)?'（'+unit+'）':'');
-}
+function productUnit(p){return OrderLogic.productUnit(p);}
+function productLabel(p){return OrderLogic.productLabel(p);}
 // 舊檔案補上商品編號；單一盲盒的整盒／單抽保留原有共用設定。
 function normalizeProductNumbers(products){
  const result=products.map(p=>({...p,productNumber:productNumber(p.productNumber??numberFromName(p.name))}));
@@ -140,22 +135,10 @@ function validate(d,{allowDuplicateNicknames=false}={}){
  assertSafeAmounts(d);
  return {schemaVersion:1,title:d.title,internationalShippingTwd:d.internationalShippingTwd??0,purchaseAccounts:accounts.map(a=>({id:a.id,name:a.name.trim()})),purchaseOrders:(d.purchaseOrders??[]).map((o,i)=>({id:o.id,name:o.name,accountId:o.accountId??'',purchaser:o.purchaser??'',isOwnCart:o.isOwnCart,serial:o.serial??i+1,actualCostTwd:o.actualCostTwd??null,actualQuantities:Object.fromEntries(d.products.map(p=>[p.id,o.actualQuantities?.[p.id]??o.quantities[p.id]??0])),quantities:Object.fromEntries(d.products.map(p=>[p.id,o.quantities[p.id]??0]))})),shipmentRecords:normalizedShipmentRecords,exchangeRate:d.exchangeRate??0.21,source:d.source&&typeof d.source.file==='string'&&typeof d.source.sheet==='string'?{file:d.source.file,sheet:d.source.sheet}:null,products:products.map(p=>({id:p.id,productNumber:p.productNumber,name:p.name,twd:p.twd,jpy:p.jpy,purchaseLimit:p.purchaseLimit??1,productUrl:p.productUrl??'',imageData:p.imageData??'',imageName:p.imageName??'',isBlindBox:p.isBlindBox??false,blindBoxSize:p.blindBoxSize??1,blindBoxType:p.blindBoxType??'box'})),orders:d.orders.map(o=>({id:o.id,sequence:o.sequence,nickname:o.nickname,isSplitBlindBox:o.isSplitBlindBox??false,isRemitted:o.isRemitted??false,isRefunded:o.isRefunded??false,shippingTwd:o.shippingTwd??0,refundQuantities:Object.fromEntries(d.products.map(p=>[p.id,o.refundQuantities?.[p.id]??0])),quantities:Object.fromEntries(d.products.map(p=>[p.id,o.quantities[p.id]??0]))}))};
 }
-function total(o){
- let twd=moneyCents(o.shippingTwd??0),jpy=0,quantity=0;
- for(const p of state.products){const q=o.quantities[p.id]??0;quantity+=q;twd+=q*moneyCents(p.twd);jpy+=q*moneyCents(p.jpy);}
- return {quantity,twd:twd/100,jpy:jpy/100,shippingTwd:o.shippingTwd??0};
-}
-function allTotals(){
- let quantity=0,twd=0,jpy=0,shipping=0;
- for(const o of state.orders){const v=total(o);quantity+=v.quantity;twd+=moneyCents(v.twd);jpy+=moneyCents(v.jpy);shipping+=moneyCents(v.shippingTwd);}
- return {quantity,twd:twd/100,jpy:jpy/100,shippingTwd:shipping/100};
-}
-function priorityLetter(index){let label='';for(let n=index+1;n>0;n=Math.floor((n-1)/26))label=String.fromCharCode(65+(n-1)%26)+label;return label;}
-function buildAllocation(){
- const originalIndex=new Map(state.orders.map((o,i)=>[o.id,i]));
- const sorted=[...state.orders].sort((a,b)=>Number((b.shippingTwd??0)>0)-Number((a.shippingTwd??0)>0)||total(b).twd-total(a).twd||(a.sequence??Infinity)-(b.sequence??Infinity)||originalIndex.get(a.id)-originalIndex.get(b.id));
- return {products:state.products.map(p=>({productId:p.id,priorities:sorted.filter(o=>(o.quantities[p.id]??0)>0).map((o,i)=>({priority:priorityLetter(i),orderId:o.id,nickname:o.nickname,quantity:o.quantities[p.id],twd:total(o).twd,shippingTwd:o.shippingTwd??0,sequence:o.sequence}))}))};
-}
+function total(o){return OrderLogic.total(state,o);}
+function allTotals(){return OrderLogic.allTotals(state);}
+function priorityLetter(index){return OrderLogic.priorityLetter(index);}
+function buildAllocation(){return OrderLogic.buildAllocation(state);}
 function renderAllocationTable(){
  const allocation=buildAllocation(),products=new Map(state.products.map(p=>[p.id,p]));
  const query=$('search').value;
@@ -164,59 +147,12 @@ function renderAllocationTable(){
  $('allocation').innerHTML='<thead><tr><th>商品</th>'+Array.from({length:count},(_,i)=>`<th>優先序 ${priorityLetter(i)}</th>`).join('')+'</tr></thead><tbody>'+rows.map(r=>`<tr data-priority-product="${esc(r.productId)}"><td data-label="商品"><strong>${esc(productLabel(products.get(r.productId)))}</strong><button type="button" class="small product-detail-export" data-export-product-detail="${esc(r.productId)}" aria-label="匯出 ${esc(productLabel(products.get(r.productId)))} 的訂購明細">匯出此商品明細</button></td>${Array.from({length:count},(_,i)=>{const b=r.priorities[i];return b&&fuzzyNickname(b.nickname,query)?`<td data-label="優先序 ${b.priority}" data-priority-order="${esc(b.orderId)}"><strong>${esc(b.nickname)}</strong><span class="priority-detail">${fmt(b.quantity)} ${productUnit(products.get(r.productId))}</span><span class="priority-detail">台幣合計 ${fmt(b.twd)}</span><span class="priority-detail">${b.shippingTwd>0?'有運費':'無運費'} · 順序 ${b.sequence??'—'}</span></td>`:'<td class="priority-empty"></td>'}).join('')}</tr>`).join('')+(rows.length?'':`<tr><td class="empty" colspan="${count+1}">尚無符合的預購商品。</td></tr>` )+'</tbody>';
 }
 let editingPurchaseId=null,lastSuggestedPurchaseName='';
-const FREE_SHIPPING_JPY=11000;
-const SHIPPING_PER_ORDER_TWD=230;
-function purchaseJpy(o){return state.products.reduce((sum,p)=>sum+Math.round(p.jpy*100)*(o.quantities[p.id]??0),0)/100;}
-function minimumShippingBundle(pool,capacity,targetJpy,existing={}){
- if(state.products.some(p=>p.isBlindBox))return minimumGroupedShippingBundle(pool,existing,targetJpy);
- const target=Math.max(0,Math.round(targetJpy*100));
- const options=state.products.map(p=>({id:p.id,cost:Math.round(p.jpy*100),count:Math.min(pool[p.id]??0,capacity[p.id]??0)})).filter(p=>p.count>0).sort((a,b)=>(pool[b.id]??0)/Math.max(1,capacity[b.id]??1)-(pool[a.id]??0)/Math.max(1,capacity[a.id]??1));
- const zero=options.filter(p=>p.cost===0),positive=options.filter(p=>p.cost>0);
- const finish=quantities=>{for(const p of zero)quantities[p.id]=p.count;return quantities;};
- if(!target)return finish({});
- const small=positive.filter(p=>p.cost<target),large=positive.filter(p=>p.cost>=target).sort((a,b)=>a.cost-b.cost);
- const smallTotal=small.reduce((sum,p)=>sum+p.cost*p.count,0);
- if(smallTotal<target)return large.length?finish({[large[0].id]:1}):null;
- const gcd=(a,b)=>{while(b){const r=a%b;a=b;b=r;}return a;};
- const divisor=positive.reduce((d,p)=>gcd(d,p.cost),0),scaledTarget=Math.ceil(target/divisor);
- const upper=Math.min(large[0]?.cost??Infinity,target+Math.max(...small.map(p=>p.cost))-1);
- const cap=Math.floor(upper/divisor),reachable=new Array(cap+1);reachable[0]={previous:null};
- for(const p of positive){const cost=p.cost/divisor;let left=Math.min(p.count,Math.floor(cap/cost)),batch=1;
-  while(left>0){const count=Math.min(batch,left),weight=cost*count;for(let sum=cap;sum>=weight;sum--)if(!reachable[sum]&&reachable[sum-weight])reachable[sum]={previous:reachable[sum-weight],productId:p.id,count};left-=count;batch*=2;}
- }
- let best=scaledTarget;while(best<=cap&&!reachable[best])best++;if(best>cap)return null;
- const quantities={};for(let node=reachable[best];node.productId;node=node.previous)quantities[node.productId]=(quantities[node.productId]??0)+node.count;
- return finish(quantities);
-}
-function buildAutomaticPurchaseOrders({onlyRemaining=false}={}){
- assertBlindBoxSettings();
- const checks=purchaseReconciliation();
- if(onlyRemaining&&checks.some(c=>c.overAllocated))throw Error('已有商品超額分配，請先手動修正，再補分配剩餘。');
- if(onlyRemaining&&(state.purchaseOrders??[]).some(o=>purchaseLimitViolations(o.quantities).length))throw Error('現有搶購訂單超過限購，請先手動修正，再補分配剩餘。');
- const pool=Object.fromEntries(state.products.map(p=>[p.id,onlyRemaining?checks.find(c=>c.productId===p.id).remaining:0])),result=onlyRemaining?clone(state.purchaseOrders??[]):[];
- const limits=purchaseCapacities();
- const nonEmpty=q=>state.products.some(p=>(q[p.id]??0)>0);
- const make=(quantities,isOwnCart,nickname='')=>{if(!nonEmpty(quantities))throw Error('剩餘商品無法依目前限購安排，請檢查商品設定。');if(result.length>=2000)throw Error('限購條件需要超過 2,000 筆搶購訂單，請調整數量後重算。');const serial=Math.max(0,...result.filter(o=>o.isOwnCart===isOwnCart).map(o=>o.serial??0))+1;result.push({id:id('po'),accountId:'',purchaser:'',serial,name:(isOwnCart?'自成一車':'訂單')+serial+(nickname?'（'+nickname+'）':''),isOwnCart,actualCostTwd:null,actualQuantities:Object.fromEntries(state.products.map(p=>[p.id,quantities[p.id]??0])),quantities:Object.fromEntries(state.products.map(p=>[p.id,quantities[p.id]??0]))});};
- const consume=q=>{for(const p of state.products){pool[p.id]-=q[p.id]??0;if(pool[p.id]<0)throw Error('搶購分配數量錯誤，請重新計算。');}};
- if(!onlyRemaining)for(const o of state.orders.filter(o=>(o.shippingTwd??0)<=0))for(const p of state.products)pool[p.id]+=o.quantities[p.id]??0;
- const index=new Map(state.orders.map((o,i)=>[o.id,i]));
- const paid=onlyRemaining?[]:state.orders.filter(o=>(o.shippingTwd??0)>0).sort((a,b)=>total(b).twd-total(a).twd||(a.sequence??Infinity)-(b.sequence??Infinity)||index.get(a.id)-index.get(b.id));
- for(const o of paid){const remaining={...o.quantities};while(nonEmpty(remaining)){
-  const quantities=fillLimitedCart(remaining);
-  for(const p of state.products)remaining[p.id]=(remaining[p.id]??0)-quantities[p.id];
-  const capacities=purchaseCapacities(quantities);
-  const ownCost=purchaseJpy({quantities}),topUp=minimumShippingBundle(pool,capacities,Math.max(0,FREE_SHIPPING_JPY-ownCost),quantities);
-  if(topUp){consume(topUp);for(const p of state.products)quantities[p.id]+=topUp[p.id]??0;}
-  make(quantities,true,o.nickname);
- }}
- while(nonEmpty(pool)){const bundle=minimumShippingBundle(pool,limits,FREE_SHIPPING_JPY);if(!bundle)break;consume(bundle);make(bundle,false);}
- // 剩餘未達免運的商品集中成單；限購不容許一筆裝完時，依上限拆成必要筆數。
- while(nonEmpty(pool)){const quantities=fillLimitedCart(pool);consume(quantities);make(quantities,false);}
- if(result.some(o=>purchaseLimitViolations(o.quantities).length))throw Error('整盒與單抽共用限購核對失敗，未取代現有搶購訂單。');
- for(const p of state.products){const expected=state.orders.reduce((sum,o)=>sum+(o.quantities[p.id]??0),0),actual=result.reduce((sum,o)=>sum+o.quantities[p.id],0);if(!Number.isSafeInteger(expected)||expected!==actual||result.some(o=>o.quantities[p.id]>limits[p.id]))throw Error('數量核對失敗，未取代現有搶購訂單。');}
- return result;
-}
-function purchaseReconciliation(){return state.products.map(p=>{const requested=state.orders.reduce((sum,o)=>sum+(o.quantities[p.id]??0),0),planned=(state.purchaseOrders??[]).reduce((sum,o)=>sum+(o.quantities[p.id]??0),0);return {productId:p.id,productNumber:p.productNumber,name:productLabel(p),unit:productUnit(p),requested,planned,difference:planned-requested,remaining:Math.max(0,requested-planned),overAllocated:Math.max(0,planned-requested)};});}
+const FREE_SHIPPING_JPY=OrderLogic.FREE_SHIPPING_JPY;
+const SHIPPING_PER_ORDER_TWD=OrderLogic.SHIPPING_PER_ORDER_TWD;
+function purchaseJpy(o){return OrderLogic.purchaseJpy(state,o);}
+function minimumShippingBundle(pool,capacity,targetJpy,existing={}){return OrderLogic.minimumShippingBundle(state,pool,capacity,targetJpy,existing);}
+function buildAutomaticPurchaseOrders({onlyRemaining=false}={}){return OrderLogic.buildAutomaticPurchaseOrders(state,{onlyRemaining,makeId:id});}
+function purchaseReconciliation(){return OrderLogic.purchaseReconciliation(state);}
 function purchaseAssignable(excludeOrderId=editingPurchaseId){
  return Object.fromEntries(state.products.map(p=>[p.id,Math.max(0,state.orders.reduce((sum,o)=>sum+(o.quantities[p.id]??0),0)-(state.purchaseOrders??[]).filter(o=>o.id!==excludeOrderId).reduce((sum,o)=>sum+(o.quantities[p.id]??0),0))]));
 }
@@ -237,18 +173,12 @@ function openPurchaseDialog(orderId=null){
  $('purchaseQuantities').innerHTML=state.products.map(p=>`<label>${esc(productLabel(p))}<input type="number" min="0" max="9007199254740991" step="1" required value="${order?.quantities[p.id]??0}" data-limit="${p.purchaseLimit??1}" data-purchase-quantity="${esc(p.id)}" aria-label="${esc(productLabel(p))} 搶購數量"><span class="priority-detail">${esc(purchaseLimitLabel(p))} · 訂購總量 ${fmt(state.orders.reduce((sum,o)=>sum+(o.quantities[p.id]??0),0))}</span></label>`).join('');
  syncPurchaseInputCaps();$('purchaseDialog').showModal();$('purchaseName').focus();$('purchaseName').select();
 }
-function refundAmount(o){return state.products.reduce((sum,p)=>sum+(o.refundQuantities?.[p.id]??0)*moneyCents(p.twd),0)/100}
-function refundGrandTotal(){return state.orders.reduce((sum,o)=>sum+moneyCents(refundAmount(o)),0)/100}
+function refundAmount(o){return OrderLogic.refundAmount(state,o);}
+function refundGrandTotal(){return OrderLogic.refundGrandTotal(state);}
 function renderRefunds(){const filtered=state.orders.filter(o=>fuzzyNickname(o.nickname,$('search').value));
  $('refunds').innerHTML='<thead><tr><th>順序</th><th>買家暱稱</th>'+state.products.map(p=>`<th class="product">${esc(productLabel(p))}<span class="price">TWD ${fmt(p.twd)}</span></th>`).join('')+'<th class="num">應退金額 TWD</th><th class="refunded">已退費</th></tr></thead><tbody>'+filtered.map(o=>`<tr class="${o.isRefunded?'refunded-row':''}"><td data-label="留言順序">${o.sequence??'—'}</td><td data-label="買家暱稱">${esc(o.nickname)}</td>${state.products.map(p=>`<td data-label="${esc(productLabel(p))}"><input type="number" min="0" max="${o.quantities[p.id]??0}" step="1" required value="${o.refundQuantities?.[p.id]??0}" data-kind="refundQty" data-order="${esc(o.id)}" data-product="${esc(p.id)}" aria-label="${esc(o.nickname+' '+productLabel(p))} 未買到數量"><span class="ordered-quantity">預購 ${fmt(o.quantities[p.id]??0)}</span></td>`).join('')}<td class="num sum" data-label="應退金額 TWD" data-refund-order="${esc(o.id)}">${fmt(refundAmount(o))}</td><td class="refunded" data-label="已退費"><input type="checkbox" data-kind="isRefunded" data-order="${esc(o.id)}" ${o.isRefunded?'checked':''} aria-label="${esc(o.nickname)} 已退費"></td></tr>`).join('')+(filtered.length?'':`<tr><td class="empty" colspan="${state.products.length+4}">沒有符合的訂購紀錄，請先新增預購訂單。</td></tr>`)+`</tbody><tfoot><tr><td colspan="2">全團應退合計</td>${state.products.map(p=>`<td class="num" data-label="${esc(productLabel(p))}" data-refund-product="${esc(p.id)}">${fmt(state.orders.reduce((sum,o)=>sum+(o.refundQuantities?.[p.id]??0),0))}</td>`).join('')}<td class="num" data-label="應退金額 TWD" id="footer-refund">${fmt(refundGrandTotal())}</td><td></td></tr></tfoot>`;
 }
-function shippingShare(){
- const purchases=state.purchaseOrders??[];
- const belowFreeShippingCount=purchases.filter(o=>state.products.some(p=>actualPurchaseQuantity(o,p.id)>0)&&purchaseJpy({quantities:actualPurchaseQuantities(o)})<FREE_SHIPPING_JPY).length;
- const zeroShippingBuyerCount=state.orders.filter(o=>(o.shippingTwd??0)===0&&state.products.some(p=>(o.quantities[p.id]??0)>(o.refundQuantities?.[p.id]??0))).length;
- const totalShippingTwd=belowFreeShippingCount*SHIPPING_PER_ORDER_TWD;
- return {belowFreeShippingCount,shippingPerOrderTwd:SHIPPING_PER_ORDER_TWD,totalShippingTwd,zeroShippingBuyerCount,perBuyerTwd:totalShippingTwd===0?0:zeroShippingBuyerCount?roundMoney(totalShippingTwd/zeroShippingBuyerCount):null};
-}
+function shippingShare(){return OrderLogic.shippingShare(state);}
 function updateRefundTotals(){const amount=refundGrandTotal();$('refundTotal').textContent=fmt(amount);const shipping=shippingShare();$('shippingTotal').textContent=shipping.perBuyerTwd===null?'—':fmt(shipping.perBuyerTwd);$('shippingCalculation').textContent=shipping.totalShippingTwd===0?`TWD／人 · 境內運費 0（實際購買未達免運 ${fmt(shipping.belowFreeShippingCount)} 筆）`:(shipping.zeroShippingBuyerCount?`TWD／人 · 境內運費：實際購買未達免運 ${fmt(shipping.belowFreeShippingCount)} 筆 × 230 ÷ ${fmt(shipping.zeroShippingBuyerCount)} 人（運費為 0 且退費後仍有商品）`:`境內運費：實際購買未達免運 ${fmt(shipping.belowFreeShippingCount)} 筆 × 230 = TWD ${fmt(shipping.totalShippingTwd)}；無可分攤對象（運費為 0 且退費後仍有商品：0 人）`);for(const o of state.orders){const el=document.querySelector(`[data-refund-order="${o.id}"]`);if(el)el.textContent=fmt(refundAmount(o));}for(const p of state.products){const el=document.querySelector(`[data-refund-product="${p.id}"]`);if(el)el.textContent=fmt(state.orders.reduce((sum,o)=>sum+(o.refundQuantities?.[p.id]??0),0));}if($('footer-refund'))$('footer-refund').textContent=fmt(amount);updateActualCostTotals();}
 function notify(text,error=false){$('message').textContent=text;$('message').classList.toggle('error',error)}
 function save(){$('saveStatus').textContent='尚未儲存訂單';}
@@ -350,10 +280,18 @@ async function readOrderFolder(){let db;try{db=await orderFolderDatabase();order
 const orderFolderReady=readOrderFolder();
 async function rememberOrderFolder(handle){let db;try{db=await orderFolderDatabase();await new Promise((resolve,reject)=>{const transaction=db.transaction('settings','readwrite');transaction.objectStore('settings').put(handle,'directory');transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);});}catch{notify('已設定訂單資料夾；此瀏覽器無法記住位置，下次需重新選擇。');}finally{db?.close();}}
 function orderPickerOptions(){return {id:'purchase-order-files',...(orderDirectoryHandle?{startIn:orderDirectoryHandle}:{}),types:[{description:'訂單檔案（.json）',accept:{'application/json':['.json']}}],excludeAcceptAllOption:false};}
-$('setOrderFolder').onclick=async()=>{if(!window.showDirectoryPicker){notify('此瀏覽器不支援預設資料夾設定，請在開啟／儲存視窗手動選擇訂單資料夾。',true);return;}try{const handle=await window.showDirectoryPicker({id:'purchase-order-folder',mode:'read'});await orderFolderReady;orderDirectoryHandle=handle;await rememberOrderFolder(handle);notify('預設訂單資料夾已設為「'+handle.name+'」，現在可按「開啟訂單」選擇 .json 檔案。');}catch(error){if(error.name!=='AbortError')notify('設定資料夾失敗：'+error.message,true);}};
-async function pickOrderFile(save=false){const options=orderPickerOptions();const show=()=>save?window.showSaveFilePicker({...options,suggestedName:orderFilename()}):window.showOpenFilePicker({...options,multiple:false});try{return await show();}catch(error){if(!options.startIn||!['NotFoundError','InvalidStateError','NotAllowedError','TypeError'].includes(error.name))throw error;orderDirectoryHandle=null;delete options.startIn;return await show();}}
+$('setOrderFolder').onclick=async()=>{if(!window.showDirectoryPicker){notify('此瀏覽器不支援預設資料夾設定，請在開啟／儲存視窗手動選擇訂單資料夾。',true);return;}try{const handle=await window.showDirectoryPicker({id:'purchase-order-folder',mode:'read'});await orderFolderReady;orderDirectoryHandle=handle;useLegacyOrderPicker=false;await rememberOrderFolder(handle);notify('預設訂單資料夾已設為「'+handle.name+'」，現在可按「開啟訂單」選擇 .json 檔案。');}catch(error){if(error.name!=='AbortError')notify('設定資料夾失敗：'+error.message,true);}};
+let orderPickerBusy=false,useLegacyOrderPicker=false;
+// 每次以開啟或拖曳取代目前訂單時加一；Drive 存檔完成時用來判斷畫面上的訂單是否已被換掉。
+let orderFileGeneration=0;
+async function forgetOrderFolder(){orderDirectoryHandle=null;let db;try{db=await orderFolderDatabase();await new Promise((resolve,reject)=>{const transaction=db.transaction('settings','readwrite');transaction.objectStore('settings').delete('directory');transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);});}catch{}finally{db?.close();}}
+// 檔案視窗必須在點擊當下同步開啟：失敗後不可重試（點擊授權已被消耗），改為清除失效的預設資料夾並交由呼叫端改用備援方式。
+function pickOrderFile(save=false){const options=orderPickerOptions();const picker=save?window.showSaveFilePicker({...options,suggestedName:orderFilename()}):window.showOpenFilePicker({...options,multiple:false});return picker.catch(error=>{if(error.name!=='AbortError'){if(options.startIn)forgetOrderFolder();useLegacyOrderPicker=true;}throw error;});}
 
-async function openOrderFile(file){if(file.size>100*1024*1024)throw Error('含附圖的訂單檔案超過 100 MB。');let parsed;try{parsed=JSON.parse((await file.text()).replace(/^\uFEFF/,''));}catch{throw Error('無法讀取訂單檔案，請選擇由此頁面儲存的訂單檔案。');}const data=validate(parsed);if(!confirm('開啟訂單將取代目前紀錄。請先儲存需要保留的資料。繼續開啟？'))return;state=data;selectedOrderIds.clear();$('search').value='';render();$('saveStatus').textContent='已開啟訂單檔案';notify('已開啟訂單，所有合計已依單價與數量重新計算。');}
+async function openOrderFile(file,driveFile=null){if(file.size>100*1024*1024)throw Error('含附圖的訂單檔案超過 100 MB。');let parsed;try{parsed=JSON.parse((await file.text()).replace(/^\uFEFF/,''));}catch{throw Error('無法讀取訂單檔案，請選擇由此頁面儲存的訂單檔案。');}const data=validate(parsed);if(!confirm('開啟訂單將取代目前紀錄。請先儲存需要保留的資料。繼續開啟？'))return;state=data;orderFileGeneration++;setCurrentDriveFile(driveFile);selectedOrderIds.clear();$('search').value='';render();$('saveStatus').textContent='已開啟訂單檔案';notify('已開啟訂單，所有合計已依單價與數量重新計算。');return true;}
+// 目前的 Google Drive 檔案只記在記憶體（DriveStorage），不寫入訂單 JSON；從本機開啟或拖曳開啟時 driveFile 為 null，會清除它。
+function setCurrentDriveFile(meta){const drive=window.DriveStorage;if(drive){if(meta)drive.setCurrentFile(meta);else drive.clearCurrentFile();}showDriveFileStatus();}
+function showDriveFileStatus(){const file=window.DriveStorage?.currentFile()??null,el=$('driveFileStatus');if(!el)return;el.hidden=!file;el.textContent=file?'Google Drive：'+file.name:'';el.title=file?'目前的訂單對應 Google Drive 檔案「'+file.name+'」，可用「儲存訂單 → 存回 Google Drive」覆蓋':'';}
 const orderDropOverlay=$('orderDropOverlay');let orderDragDepth=0;
 function hasOrderFileTransfer(event){return Array.from(event.dataTransfer?.types??[]).includes('Files');}
 document.addEventListener('dragenter',event=>{if(!hasOrderFileTransfer(event))return;event.preventDefault();orderDragDepth++;orderDropOverlay.hidden=false;});
@@ -362,9 +300,9 @@ document.addEventListener('dragleave',event=>{if(!hasOrderFileTransfer(event))re
 document.addEventListener('drop',async event=>{if(!hasOrderFileTransfer(event))return;event.preventDefault();orderDragDepth=0;orderDropOverlay.hidden=true;const files=Array.from(event.dataTransfer.files??[]);if(files.length!==1){notify('請一次拖曳一個 .json 訂單檔案。',true);return;}const file=files[0];if(!file.name.toLowerCase().endsWith('.json')){notify('請拖曳 .json 訂單檔案。',true);return;}try{await openOrderFile(file);}catch(error){notify('開啟失敗：'+error.message,true);}});
 function orderFilename(){return (state.title.replace(/[\\/:*?"<>|]/g,'_')||'代購紀錄')+'.json';}
 function fileSaveFallback(contents){const blob=new Blob([contents],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=orderFilename();link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-$('import').onclick=async()=>{if(!window.showOpenFilePicker){$('file').click();return;}let fileSelected=false,stage='選擇訂單檔案';try{const [handle]=await pickOrderFile();fileSelected=true;stage='讀取所選訂單';await openOrderFile(await handle.getFile());}catch(error){if(error.name==='AbortError'&&!fileSelected)notify('已取消開啟訂單，原資料未變更。');else notify('開啟失敗（'+stage+'）：'+error.name+(error.message?': '+error.message:''),true);}};
+async function openLocalOrder(){if(orderPickerBusy)return;if(!window.showOpenFilePicker||useLegacyOrderPicker){$('file').click();return;}orderPickerBusy=true;let fileSelected=false,stage='選擇訂單檔案';try{const [handle]=await pickOrderFile();fileSelected=true;stage='讀取所選訂單';await openOrderFile(await handle.getFile());}catch(error){if(error.name==='AbortError'&&!fileSelected)notify('已取消開啟訂單，原資料未變更。');else if(!fileSelected)notify('系統檔案視窗無法開啟（'+error.name+'），已切換為相容模式：請再按一次「開啟訂單」，或直接把 .json 拖曳到頁面。',true);else notify('開啟失敗（'+stage+'）：'+error.name+(error.message?': '+error.message:''),true);}finally{orderPickerBusy=false;}}
 $('file').onchange=async()=>{const file=$('file').files[0];if(!file)return;try{await openOrderFile(file);}catch(error){notify('開啟失敗：'+error.message,true);}finally{$('file').value='';}};
-$('export').onclick=async()=>{if(!validUI())return;let fileSelected=false,stage='準備訂單資料';try{const contents=JSON.stringify(payload(),null,2);if(window.showSaveFilePicker){stage='選擇儲存位置';const handle=await pickOrderFile(true);fileSelected=true;stage='建立檔案寫入器';const writer=await handle.createWritable();try{stage='寫入訂單資料';await writer.write(contents);stage='完成檔案寫入';await writer.close();}catch(error){try{await writer.abort();}catch{}throw error;}}else {stage='下載訂單檔案';fileSaveFallback(contents);}$('saveStatus').textContent='已儲存訂單檔案';notify('訂單已儲存，可使用「開啟訂單」繼續編輯。');}catch(error){if(error.name==='AbortError'&&!fileSelected)notify('未完成存檔（'+stage+'），訂單仍未儲存。');else notify('儲存失敗（'+stage+'）：'+error.name+(error.message?': '+error.message:''),true);}};
+async function saveLocalOrder(){if(orderPickerBusy||!validUI())return;orderPickerBusy=true;let fileSelected=false,stage='準備訂單資料';try{if(window.showSaveFilePicker&&!useLegacyOrderPicker){stage='選擇儲存位置';let handle;try{handle=await pickOrderFile(true);}catch(error){if(error.name==='AbortError')throw error;handle=null;}if(handle){fileSelected=true;stage='準備訂單資料';const contents=JSON.stringify(payload(),null,2);stage='建立檔案寫入器';const writer=await handle.createWritable();try{stage='寫入訂單資料';await writer.write(contents);stage='完成檔案寫入';await writer.close();}catch(error){try{await writer.abort();}catch{}throw error;}}else {stage='下載訂單檔案';fileSaveFallback(JSON.stringify(payload(),null,2));$('saveStatus').textContent='已儲存訂單檔案';notify('系統儲存視窗無法開啟，已改為直接下載訂單檔案（請到瀏覽器的下載資料夾查看）。');return;}}else {stage='下載訂單檔案';fileSaveFallback(JSON.stringify(payload(),null,2));}$('saveStatus').textContent='已儲存訂單檔案';notify('訂單已儲存，可使用「開啟訂單」繼續編輯。');}catch(error){if(error.name==='AbortError'&&!fileSelected)notify('未完成存檔（'+stage+'），訂單仍未儲存。');else notify('儲存失敗（'+stage+'）：'+error.name+(error.message?': '+error.message:''),true);}finally{orderPickerBusy=false;}}
 
 'use strict';
 const allocationImageButton=document.createElement('button');
@@ -485,52 +423,21 @@ document.querySelector('.panel').addEventListener('click',async e=>{
  }catch(error){notify('匯出失敗：'+error.message,true);}finally{button.disabled=false;}
 });
 
-function blindBoxKey(product){return product.isBlindBox?'blind:'+nicknameKey(productNumber(product.productNumber)||product.blindBoxSeries||'legacy-shared'):'product:'+product.id;}
-function blindBoxSource(product,products=state.products){
- if(!product.isBlindBox)return product;
- const members=products.filter(p=>p.isBlindBox&&blindBoxKey(p)===blindBoxKey(product));
- return members.find(p=>p.blindBoxType!=='single')??members[0]??product;
-}
-function blindBoxGroups(products=state.products){
- const groups=new Map();
- for(const p of products){
-  const key=blindBoxKey(p),source=blindBoxSource(p,products);
-  if(!groups.has(key))groups.set(key,{key,name:p.isBlindBox?'#'+(productNumber(p.productNumber)||p.blindBoxSeries||source.name):productLabel(p),isBlindBox:!!p.isBlindBox,boxSize:source.blindBoxSize??1,limit:source.purchaseLimit??1,products:[]});
-  groups.get(key).products.push(p);
- }
- return [...groups.values()];
-}
+function blindBoxKey(product){return OrderLogic.blindBoxKey(product);}
+function blindBoxSource(product,products=state.products){return OrderLogic.blindBoxSource(product,products);}
+function blindBoxGroups(products=state.products){return OrderLogic.blindBoxGroups(products);}
 
-function productUnitWeight(p){return p.isBlindBox&&p.blindBoxType!=='single'?(p.blindBoxSize??1):1;}
-function groupUnitCap(group){return group.limit*(group.isBlindBox?group.boxSize:1);}
-function assertBlindBoxSettings(products=state.products){
- for(const group of blindBoxGroups(products)){
-  if(!Number.isSafeInteger(group.limit)||group.limit<1||!Number.isSafeInteger(group.boxSize)||group.boxSize<1||!Number.isSafeInteger(groupUnitCap(group)))throw Error(group.name+' 的限購數量或每盒抽數無效。');
-  if(group.isBlindBox&&group.products.some(p=>(p.blindBoxSize??1)!==group.boxSize||(p.purchaseLimit??1)!==group.limit))throw Error('盲盒 '+group.name+' 的每盒抽數與限購盒數必須一致。');
- }
-}
+function productUnitWeight(p){return OrderLogic.productUnitWeight(p);}
+function groupUnitCap(group){return OrderLogic.groupUnitCap(group);}
+function assertBlindBoxSettings(products=state.products){return OrderLogic.assertBlindBoxSettings(products);}
 
-function purchaseLimitViolations(quantities){return blindBoxGroups().flatMap(group=>{const used=group.products.reduce((sum,p)=>sum+(quantities[p.id]??0)*productUnitWeight(p),0),cap=groupUnitCap(group);return used>cap?[{productId:group.products.find(p=>(quantities[p.id]??0)>0).id,message:group.isBlindBox?'盲盒「'+group.name+'」合計 '+fmt(used)+' 抽，超過 '+fmt(group.limit)+' 盒 × '+fmt(group.boxSize)+' = '+fmt(cap)+' 抽（整盒與單抽共用限購）':group.name+' 超過單筆限購 '+fmt(cap)}]:[];});}
-function purchaseCapacities(existing={}){const capacities={};for(const group of blindBoxGroups()){const used=group.products.reduce((sum,p)=>sum+(existing[p.id]??0)*productUnitWeight(p),0),left=Math.max(0,groupUnitCap(group)-used);for(const p of group.products)capacities[p.id]=Math.floor(left/productUnitWeight(p));}return capacities;}
-function fillLimitedCart(pool,existing={}){const quantities={...existing};for(const group of blindBoxGroups()){let left=groupUnitCap(group)-group.products.reduce((sum,p)=>sum+(quantities[p.id]??0)*productUnitWeight(p),0);const products=[...group.products].sort((a,b)=>productUnitWeight(b)-productUnitWeight(a));for(const p of products){const count=Math.min(pool[p.id]??0,Math.floor(Math.max(0,left)/productUnitWeight(p)));quantities[p.id]=(quantities[p.id]??0)+count;left-=count*productUnitWeight(p);}}return Object.fromEntries(state.products.map(p=>[p.id,quantities[p.id]??0]));}
+function purchaseLimitViolations(quantities){return OrderLogic.purchaseLimitViolations(state,quantities);}
+function purchaseCapacities(existing={}){return OrderLogic.purchaseCapacities(state,existing);}
+function fillLimitedCart(pool,existing={}){return OrderLogic.fillLimitedCart(state,pool,existing);}
 function purchaseLimitLabel(p){const source=blindBoxSource(p),cap=(source.blindBoxSize??1)*(source.purchaseLimit??1);return p.isBlindBox?'#'+productNumber(p.productNumber)+' · 每盒 '+fmt(source.blindBoxSize??1)+' 抽 · 每筆整盒最多 '+fmt(source.purchaseLimit??1)+' 盒／全買單抽最多 '+fmt(cap)+' 抽 · 同款共用 '+fmt(cap)+' 抽':'單筆限購 '+fmt(p.purchaseLimit??1)+' 件';}
 
 // 每個盲盒商品編號各自計算整盒／單抽容量，再找最低達免運金額。
-function minimumGroupedShippingBundle(pool,existing,targetJpy){
- assertBlindBoxSettings();const target=Math.max(0,Math.round(targetJpy*100));if(!target)return {};
- const costs=state.products.map(p=>Math.round(p.jpy*100)).filter(n=>n>0);if(!costs.length)return null;
- const gcd=(a,b)=>{while(b){const r=a%b;a=b;b=r;}return a;},divisor=costs.reduce(gcd),wanted=Math.ceil(target/divisor),upper=Math.floor((target+Math.max(...costs)-1)/divisor);
- let reachable=new Map([[0,{}]]),operations=0;
- for(const group of blindBoxGroups()){
-  const left=groupUnitCap(group)-group.products.reduce((sum,p)=>sum+(existing[p.id]??0)*productUnitWeight(p),0);let choices=new Map([[0,{units:0,quantities:{}}]]);
-  for(const p of group.products){const cost=Math.round(p.jpy*100)/divisor,weight=productUnitWeight(p);if(!cost)continue;const next=new Map();for(const [sum,node] of choices){const max=Math.min(pool[p.id]??0,Math.floor((left-node.units)/weight),Math.floor((upper-sum)/cost));for(let q=0;q<=max;q++){if(++operations>3000000)throw Error('盲盒組合過多，請減少商品或調整限購條件後再試。');const value=sum+q*cost,units=node.units+q*weight;if(!next.has(value)||next.get(value).units>units)next.set(value,{units,quantities:{...node.quantities,[p.id]:q}});}}choices=next;}
-  const next=new Map();for(const [sum,quantities] of reachable)for(const [cost,node] of choices){if(++operations>3000000)throw Error('盲盒組合過多，請減少商品或調整限購條件後再試。');const value=sum+cost;if(value<=upper&&!next.has(value))next.set(value,{...quantities,...node.quantities});}reachable=next;
- }
- let best=Infinity;for(const value of reachable.keys())if(value>=wanted&&value<best)best=value;if(!Number.isFinite(best))return null;
- const selected=reachable.get(best),combined={...existing};for(const p of state.products)combined[p.id]=(existing[p.id]??0)+(selected[p.id]??0);
- for(const group of blindBoxGroups()){let left=groupUnitCap(group)-group.products.reduce((sum,p)=>sum+(combined[p.id]??0)*productUnitWeight(p),0);for(const p of group.products)if(Math.round(p.jpy*100)===0){const count=Math.min(pool[p.id]??0,Math.floor(left/productUnitWeight(p)));selected[p.id]=count;left-=count*productUnitWeight(p);}}
- return selected;
-}
+function minimumGroupedShippingBundle(pool,existing,targetJpy){return OrderLogic.minimumGroupedShippingBundle(state,pool,existing,targetJpy);}
 
 document.querySelector('.panel').addEventListener('change',e=>{
  const el=e.target,kind=el.dataset.kind;
